@@ -31,6 +31,19 @@
         flex-shrink: 0;
         transition: box-shadow 0.3s;
       }
+      /* center the internal renderer so the model appears centered */
+      model-viewer {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+      }
+      model-viewer canvas {
+        display: block;
+        margin: 0 auto;
+        max-width: 100%;
+      }
       model-viewer:hover {
         box-shadow: 0 16px 48px 0 rgba(31, 38, 135, 0.55);
       }
@@ -85,13 +98,15 @@
                 ios-src="zivkiro.usdz"
                 alt="zivkiro"
                 ar
-                auto-rotate
                 camera-controls
                 autoplay
                 animation-loop
                 animation-name="CubeAction"
-                ar-modes="webxr scene-viewer quick-look" 
-                environment-image="neutral">   
+                ar-modes="webxr scene-viewer quick-look"
+                environment-image="neutral"
+                camera-orbit="0deg 75deg 2.5m"
+                camera-target="0m 1m 0m"
+                reveal="auto">
   </model-viewer>
    
 
