@@ -94,184 +94,20 @@
   </head>
   <body>
 <H2>Zivkiro</H2>
-  <!-- three.js viewer: smooth looping with crossfade between end and start -->
-  <div id="three-container" style="width:80%;height:50%;min-height:300px;max-width:800px;margin:30px 0;border-radius:32px;background:linear-gradient(120deg,#232526 0%,#414345 100%);box-shadow:0 8px 32px rgba(31,38,135,0.37);border:1px solid rgba(255,255,255,0.08);overflow:hidden;position:relative;">
-    <div id="three-controls" style="position:absolute;right:12px;top:12px;z-index:5;display:flex;gap:8px;">
-      <button id="playPauseBtn" style="background:rgba(0,0,0,0.6);color:#fff;border:1px solid rgba(255,255,255,0.08);padding:8px 12px;border-radius:8px;cursor:pointer;">Pause</button>
-      <button id="restartBtn" style="background:rgba(0,0,0,0.6);color:#fff;border:1px solid rgba(255,255,255,0.08);padding:8px 12px;border-radius:8px;cursor:pointer;">Restart</button>
-    </div>
-  </div>
-
-  <script src="https://unpkg.com/three@0.174.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.174.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="https://unpkg.com/three@0.174.0/examples/js/controls/OrbitControls.js"></script>
-
-  <script>
-    (function(){
-      const container = document.getElementById('three-container');
-      const scene = new THREE.Scene();
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setPixelRatio(window.devicePixelRatio || 1);
-      renderer.setSize(container.clientWidth, container.clientHeight);
-      renderer.outputEncoding = THREE.sRGBEncoding;
-      container.appendChild(renderer.domElement);
-
-      const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
-      camera.position.set(0, 1.2, 2.8);
-
-      const controls = new THREE.OrbitControls(camera, renderer.domElement);
-      controls.target.set(0, 1, 0);
-      controls.update();
-
-      scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.6));
-      const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-      dir.position.set(5, 10, 7.5);
-      scene.add(dir);
-
-      const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(10,10),
-        new THREE.MeshBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.0 })
-      );
-      ground.rotation.x = -Math.PI/2;
-      ground.position.y = 0;
-      scene.add(ground);
-
-      let mixer = null;
-      let clock = new THREE.Clock();
-      let playing = true;
-
-      // Crossfade parameters
-      const fadeDuration = 0.18; // seconds to blend end->start
-      let clipDuration = 0;
-      let elapsed = 0;
-      let crossfading = false;
-      let crossfadeProgress = 0;
-
-      let actionA = null, actionB = null, currentAction = null, nextAction = null;
-
-      const loader = new THREE.GLTFLoader();
-      loader.load('zivkiro.glb', function(gltf){
-        const model = gltf.scene || gltf.scenes[0];
-        scene.add(model);
-
-        // center model horizontally and align base to y=0
-        const box = new THREE.Box3().setFromObject(model);
-        const center = new THREE.Vector3();
-        box.getCenter(center);
-        model.position.x -= center.x;
-        model.position.z -= center.z;
-        const minY = box.min.y;
-        model.position.y -= minY;
-
-        if (gltf.animations && gltf.animations.length) {
-          clipDuration = gltf.animations[0].duration;
-          mixer = new THREE.AnimationMixer(model);
-
-          actionA = mixer.clipAction(gltf.animations[0]);
-          actionB = mixer.clipAction(gltf.animations[0]);
-
-          actionA.enabled = true;
-          actionB.enabled = true;
-
-          // ensure repeat looping
-          actionA.setLoop(THREE.LoopRepeat, Infinity);
-          actionB.setLoop(THREE.LoopRepeat, Infinity);
-
-          // start actionA at t=0 but we will advance mixer so we can set starting offset if needed
-          actionA.reset();
-          actionA.play();
-          actionA.setEffectiveWeight(1);
-
-          // prepare actionB as silent
-          actionB.reset();
-          actionB.play();
-          actionB.setEffectiveWeight(0);
-
-          currentAction = actionA;
-          nextAction = actionB;
-        }
-      }, undefined, function(err){ console.error('GLTF load error', err); });
-
-      function onWindowResize(){
-        const w = container.clientWidth;
-        const h = container.clientHeight;
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
-      }
-      window.addEventListener('resize', onWindowResize);
-
-      function animate(){
-        requestAnimationFrame(animate);
-        const dt = clock.getDelta();
-        if (playing && mixer) {
-          mixer.update(dt);
-          elapsed += dt;
-
-          if (!crossfading && clipDuration > 0) {
-            const timeInLoop = elapsed % clipDuration;
-            if (timeInLoop >= clipDuration - fadeDuration) {
-              // begin a crossfade from currentAction (near end) to nextAction (start)
-              crossfading = true;
-              crossfadeProgress = 0;
-              // reset next action to beginning
-              nextAction.reset();
-              nextAction.play();
-              nextAction.setEffectiveTimeScale(1);
-              nextAction.setEffectiveWeight(0);
-              // ensure nextAction's internal time starts at 0
-              nextAction.time = 0;
-            }
-          }
-
-          if (crossfading) {
-            crossfadeProgress += dt;
-            const t = Math.min(crossfadeProgress / fadeDuration, 1);
-            // smoothstep for nicer blend
-            const smooth = t * t * (3 - 2 * t);
-            currentAction.setEffectiveWeight(1 - smooth);
-            nextAction.setEffectiveWeight(smooth);
-            if (t >= 1) {
-              // swap actions
-              const tmp = currentAction; currentAction = nextAction; nextAction = tmp;
-              // make sure the now-next action is set to weight 0
-              nextAction.setEffectiveWeight(0);
-              crossfading = false;
-            }
-          }
-        }
-        controls.update();
-        renderer.render(scene, camera);
-      }
-      animate();
-
-      // Play/Pause + Restart UI
-      const playPauseBtn = document.getElementById('playPauseBtn');
-      const restartBtn = document.getElementById('restartBtn');
-      if (playPauseBtn) {
-        playPauseBtn.addEventListener('click', () => {
-          playing = !playing;
-          playPauseBtn.textContent = playing ? 'Pause' : 'Play';
-          controls.enabled = playing;
-        });
-      }
-      if (restartBtn) {
-        restartBtn.addEventListener('click', () => {
-          // reset mixer and actions to time=0 then jump to 1s skip if desired
-          elapsed = 0;
-          if (mixer) mixer.setTime(0);
-          if (actionA && actionB) {
-            actionA.reset(); actionB.reset();
-            actionA.play(); actionB.play();
-            actionA.setEffectiveWeight(1); actionB.setEffectiveWeight(0);
-            currentAction = actionA; nextAction = actionB;
-          }
-          playing = true;
-          if (playPauseBtn) { playPauseBtn.textContent = 'Pause'; }
-        });
-      }
-    })();
-  </script>
+  <model-viewer src="zivkiro.glb"
+                ios-src="zivkiro.usdz"
+                alt="zivkiro"
+                ar
+                camera-controls
+                autoplay
+                animation-loop
+                animation-name="CubeAction"
+                ar-modes="webxr scene-viewer quick-look"
+                environment-image="neutral"
+                camera-orbit="0deg 75deg 2.5m"
+                camera-target="0m 1m 0m"
+                reveal="auto">
+  </model-viewer>
    
 
 
